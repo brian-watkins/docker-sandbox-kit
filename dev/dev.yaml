@@ -1,0 +1,42 @@
+# syntax=docker/sandbox-kit:3
+# Everyday local-development setup: forwards the host SSH agent, copies the host git identity,
+# and registers the editor and pager that git expects. See README.md for why each is needed.
+schemaVersion: "3"
+kind: mixin
+displayName: Local development
+version: "0.1.0"
+
+args:
+  editor:
+    default: "vim"
+    enum: ["vim", "nano"]
+    description: Program that `editor` (and so git) runs
+
+capabilities:
+  # Host SSH agent at /run/ssh-agent.sock (https://github.com/docker/sbx-releases/issues/835).
+  - type: com.docker.sandbox/ssh-agent@1
+    config:
+      phase: runtime
+
+  # Host global git user.name and user.email. Sandbox creation fails if they aren't set.
+  - type: com.docker.sandbox/git-identity@1
+
+  # The image ships vim, less and nano but never registers the Debian alternatives, and
+  # Debian's git runs `editor` and `pager` by default.
+  - type: com.docker.sandbox/lifecycle@1
+    config:
+      install:
+        - command: >-
+            set -e;
+            for name in vim vi view; do
+              update-alternatives --install "/usr/bin/$name" "$name" /usr/bin/vim.basic 30;
+            done;
+            update-alternatives --install /usr/bin/editor editor /usr/bin/vim.basic 30;
+            update-alternatives --install /usr/bin/editor editor /usr/bin/nano 40;
+            update-alternatives --install /usr/bin/pager pager /usr/bin/less 77;
+            case "${{ kit.args.editor }}" in
+              vim) update-alternatives --set editor /usr/bin/vim.basic ;;
+              nano) update-alternatives --set editor /usr/bin/nano ;;
+            esac
+          user: "0"
+          description: Register vi, vim, view, editor and pager

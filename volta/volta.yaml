@@ -1,0 +1,59 @@
+# syntax=docker/sandbox-kit:3
+# Installs Volta (https://volta.sh) so each project gets the Node version pinned in the
+# "volta" field of its package.json. node, npm and npx in /usr/local/bin are Volta shims.
+schemaVersion: "3"
+kind: mixin
+displayName: Volta
+version: "0.1.0"
+provides: ["volta@2.0.2", "node"]
+
+args:
+  voltaVersion:
+    default: "2.0.2"
+    pattern: '^[0-9]+\.[0-9]+\.[0-9]+$'
+    description: Volta release to install
+    buildArg: VOLTA_VERSION
+  defaultNode:
+    default: "lts"
+    pattern: '^[A-Za-z0-9.@-]+$'
+    description: Node version used outside projects that pin one
+  unsafeGlobal:
+    default: "1"
+    enum: ["0", "1"]
+    description: Let `npm i -g` install into the sandbox's npm prefix instead of Volta shims
+    env: VOLTA_UNSAFE_GLOBAL
+
+build: |
+  FROM alpine:3.22 AS volta
+  ARG TARGETARCH
+  ARG VOLTA_VERSION
+  RUN set -eu; \
+      case "$TARGETARCH" in \
+        amd64) asset="volta-${VOLTA_VERSION}-linux.tar.gz" ;; \
+        arm64) asset="volta-${VOLTA_VERSION}-linux-arm.tar.gz" ;; \
+        *) echo "unsupported architecture: $TARGETARCH" >&2; exit 1 ;; \
+      esac; \
+      mkdir -p /out/usr/local/bin; \
+      wget -qO- "https://github.com/volta-cli/volta/releases/download/v${VOLTA_VERSION}/${asset}" \
+        | tar -xz -C /out/usr/local/bin; \
+      for tool in node npm npx; do ln -s volta-shim "/out/usr/local/bin/$tool"; done
+
+  # Newer Node releases need libatomic, which the sandbox image (Debian 13) doesn't ship.
+  FROM debian:trixie-slim AS libs
+  RUN set -eu; \
+      apt-get update; \
+      apt-get install -y --no-install-recommends libatomic1; \
+      mkdir -p /out; \
+      for lib in /usr/lib/*-linux-gnu/libatomic.so.1*; do cp -a --parents "$lib" /out/; done
+
+  FROM scratch
+  COPY --from=volta /out/ /
+  COPY --from=libs /out/ /
+
+capabilities:
+  - type: com.docker.sandbox/lifecycle@1
+    config:
+      install:
+        - command: HOME=/home/agent volta install "node@${{ kit.args.defaultNode }}"
+          user: "1000"
+          description: Install a default Node version for use outside pinned projects
