@@ -31,7 +31,7 @@ sandbox gets its own Git clone and its own dependencies:
 - The host repo is mounted read-only at `/run/sandbox/source`. Only committed files are in the
   clone, so copy anything untracked you need from there, e.g.
   `cp /run/sandbox/source/.env .`.
-- Run `npm install` (or similar) inside the sandbox after creating it.
+- Run `npm ci` (or similar) inside the sandbox after creating it.
 - To get work back, push from the sandbox to `origin` (the `dev` mixin forwards your SSH
   agent), or fetch on the host from the `sandbox-<name>` remote that `sbx` adds:
   `git fetch sandbox-funmail`.
@@ -40,10 +40,12 @@ sandbox gets its own Git clone and its own dependencies:
 
 Mixins for Docker Sandboxes (`sbx`).
 
-- `dev/`: everyday setup for local development. It does three things:
+- `dev/`: everyday setup for local development. It does four things:
   - Forwards the host SSH agent to `/run/ssh-agent.sock`. The built-in agent kits don't request
-    this, so without it there is no agent in the sandbox
+    this, so without it there is no ssh agent in the sandbox
     ([docker/sbx-releases#835](https://github.com/docker/sbx-releases/issues/835)).
+  - Allows network access to `github.com:22`, so git can push and pull over SSH. Without
+    this, a `deny-all` global policy blocks that port.
   - Copies the host's global git `user.name` and `user.email` into the sandbox. The built-in
     agent kits don't request this either, so without it commits have no author. Creating the
     sandbox fails if the host has no global name and email set.

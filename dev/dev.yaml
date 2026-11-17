@@ -18,6 +18,12 @@ capabilities:
     config:
       phase: runtime
 
+  # Allow git over SSH to GitHub so the forwarded agent can push and pull.
+  - type: com.docker.sandbox/network-policy@1
+    config:
+      runtime:
+        allow: ["github.com:22"]
+
   # Host global git user.name and user.email. Sandbox creation fails if they aren't set.
   - type: com.docker.sandbox/git-identity@1
 
